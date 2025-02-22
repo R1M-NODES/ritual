@@ -1,124 +1,107 @@
 #!/bin/bash
 
 # Підключення загальних функцій та змінних з репозиторію
-source <(curl -s https://raw.githubusercontent.com/R1M-NODES/utils/master/common.sh)
+source <(curl -s https://raw.githubusercontent.com/R1M-NODES/utils/master/common.sh) || { echo "Failed to load common.sh"; exit 1; }
 
 # Відображення логотипу
 printLogo
 
-# Запрашиваем параметры у пользователя
+# Запит параметрів у користувача (один раз)
 echo -e "Setting Node"
 RPC_URL=$(request_param "Press RPC URL")
-PRIVATE_KEY=$(request_param "Press you privat key")
+PRIVATE_KEY=$(request_param "Press your private key")
 
-REGISTRY_ADDRESS=0x3B1554f346DFe5c482Bb4BA31b880c1C18412170
+# Константи
+REGISTRY_ADDRESS="0x3B1554f346DFe5c482Bb4BA31b880c1C18412170"
 IMAGE="ritualnetwork/infernet-node:1.4.0"
 
-sudo apt update -y
-sudo apt install mc wget curl git htop netcat net-tools unzip jq build-essential ncdu tmux make cmake clang pkg-config libssl-dev protobuf-compiler bc lz4 screen -y
+# Оновлення системи та встановлення залежностей
+printGreen "Installing system dependencies"
+sudo apt update -y && sudo apt install -y mc wget curl git htop netcat net-tools unzip jq \
+    build-essential ncdu tmux make cmake clang pkg-config libssl-dev protobuf-compiler bc lz4 screen || { echo "Failed to install dependencies"; exit 1; }
 
 # Встановлення Docker та Docker Compose
-printGreen "Install Docker and Docker Compose"
-bash <(curl -s https://raw.githubusercontent.com/R1M-NODES/utils/master/docker-install.sh)
+printGreen "Installing Docker and Docker Compose"
+bash <(curl -s https://raw.githubusercontent.com/R1M-NODES/utils/master/docker-install.sh) || { echo "Failed to install Docker"; exit 1; }
 
-# Встановлення rush-install.sh
+# Встановлення допоміжних скриптів
 bash <(curl -s https://raw.githubusercontent.com/R1M-NODES/utils/master/rush-install.sh)
-
-# Встановлення ufw-install.sh
 bash <(curl -s https://raw.githubusercontent.com/R1M-NODES/utils/master/ufw.sh)
-
-# Встановлення go_install.sh
 bash <(curl -s https://raw.githubusercontent.com/R1M-NODES/utils/master/go_install.sh)
 
-# Запрашиваем параметры у пользователя
-echo -e "Setting Node"
-RPC_URL=$(request_param "Press RPC URL")
-PRIVATE_KEY=$(request_param "Press you privat key")
+# Клонування репозиторію
+cd "$HOME" || exit 1
+git clone https://github.com/ritual-net/infernet-container-starter && cd infernet-container-starter || { echo "Failed to clone repository"; exit 1; }
+cp "$HOME/infernet-container-starter/projects/hello-world/container/config.json" "$HOME/infernet-container-starter/deploy/config.json"
 
-REGISTRY_ADDRESS=0x3B1554f346DFe5c482Bb4BA31b880c1C18412170
-IMAGE="ritualnetwork/infernet-node:1.4.0"
+# Конфігурація JSON файлів
+configure_json() {
+    local file=$1
+    sed -i "s|\"rpc_url\": \"[^\"]*\"|\"rpc_url\": \"$RPC_URL\"|" "$file" &&
+    sed -i "s|\"private_key\": \"[^\"]*\"|\"private_key\": \"$PRIVATE_KEY\"|" "$file" &&
+    sed -i "s|\"registry_address\": \"[^\"]*\"|\"registry_address\": \"$REGISTRY_ADDRESS\"|" "$file" &&
+    sed -i 's|"sleep": .*|"sleep": 3,|' "$file" &&
+    sed -i 's|"batch_size": .*|"batch_size": 800,|' "$file" &&
+    sed -i 's|"trail_head_blocks": .*|"trail_head_blocks": 3,|' "$file" &&
+    sed -i 's|"sync_period": .*|"sync_period": 30|' "$file" &&
+    sed -i 's|"starting_sub_id": .*|"starting_sub_id": 160000,|' "$file"
+}
 
-# Клонирование репозитория
-cd $HOME
-git clone https://github.com/ritual-net/infernet-container-starter && cd infernet-container-starter
-cp $HOME/infernet-container-starter/projects/hello-world/container/config.json $HOME/infernet-container-starter/deploy/config.json
+configure_json "$HOME/infernet-container-starter/deploy/config.json"
+configure_json "$HOME/infernet-container-starter/projects/hello-world/container/config.json"
 
+# Конфігурація Deploy.s.sol
+sed -i "s|address registry = .*|address registry = $REGISTRY_ADDRESS;|" "$HOME/infernet-container-starter/projects/hello-world/contracts/script/Deploy.s.sol"
 
-# Конфигурация deploy/config.json
-DEPLOY_JSON=$HOME/infernet-container-starter/deploy/config.json
-sed -i 's|"rpc_url": "[^"]*"|"rpc_url": "'"$RPC_URL"'"|' "$DEPLOY_JSON"
-sed -i 's|"private_key": "[^"]*"|"private_key": "'"$PRIVATE_KEY"'"|' "$DEPLOY_JSON"
-sed -i 's|"registry_address": "[^"]*"|"registry_address": "'"$REGISTRY_ADDRESS"'"|' "$DEPLOY_JSON"
-sed -i 's|"sleep": .*|"sleep": 3,|' "$DEPLOY_JSON"
-sed -i 's|"batch_size": .*|"batch_size": 800,|' "$DEPLOY_JSON"
-sed -i 's|"trail_head_blocks": .*|"trail_head_blocks": 3,|' "$DEPLOY_JSON"
-sed -i 's|"sync_period": .*|"sync_period": 30|' "$DEPLOY_JSON"
-sed -i 's|"starting_sub_id": .*|"starting_sub_id": 160000,|' "$DEPLOY_JSON"
+# Конфігурація Makefile
+MAKEFILE="$HOME/infernet-container-starter/projects/hello-world/contracts/Makefile"
+sed -i "s|sender := .*|sender := $PRIVATE_KEY|" "$MAKEFILE"
+sed -i "s|RPC_URL := .*|RPC_URL := $RPC_URL|" "$MAKEFILE"
 
-# Конфигурация container/config.json
-CONTAINER_JSON=$HOME/infernet-container-starter/projects/hello-world/container/config.json
+# Конфігурація docker-compose
+DOCKER_COMPOSE="$HOME/infernet-container-starter/deploy/docker-compose.yaml"
+sed -i "s|ritualnetwork/infernet-node:.*|ritualnetwork/infernet-node:1.4.0|" "$DOCKER_COMPOSE"
+sed -i 's|0.0.0.0:4000:4000|0.0.0.0:4321:4000|' "$DOCKER_COMPOSE"
+sed -i 's|8545:3000|8845:3000|' "$DOCKER_COMPOSE"
+sed -i 's|container_name: infernet-anvil|container_name: infernet-anvil\n    restart: on-failure|' "$DOCKER_COMPOSE"
 
-sed -i 's|"rpc_url": "[^"]*"|"rpc_url": "'"$RPC_URL"'"|' "$CONTAINER_JSON"
-sed -i 's|"private_key": "[^"]*"|"private_key": "'"$PRIVATE_KEY"'"|' "$CONTAINER_JSON"
-sed -i 's|"registry_address": "[^"]*"|"registry_address": "'"$REGISTRY_ADDRESS"'"|' "$CONTAINER_JSON"
-sed -i 's|"sleep": .*|"sleep": 3,|' "$CONTAINER_JSON"
-sed -i 's|"batch_size": .*|"batch_size": 800,|' "$CONTAINER_JSON"
-sed -i 's|"trail_head_blocks": .*|"trail_head_blocks": 3,|' "$CONTAINER_JSON"
-sed -i 's|"sync_period": .*|"sync_period": 30|' "$CONTAINER_JSON"
-sed -i 's|"starting_sub_id": .*|"starting_sub_id": 160000,|' "$CONTAINER_JSON"
+# Запуск контейнерів
+docker compose -f "$DOCKER_COMPOSE" up -d || { echo "Failed to start containers"; exit 1; }
 
-# Конфигурация script/Deploy.s.sol
-sed -i 's|address registry = .*|address registry = 0x3B1554f346DFe5c482Bb4BA31b880c1C18412170;|' "$HOME/infernet-container-starter/projects/hello-world/contracts/script/Deploy.s.sol"
+# Встановлення Foundry
+printGreen "Installing Foundry"
+cd "$HOME" || exit 1
+mkdir -p foundry && cd foundry || exit 1
+curl -L https://foundry.paradigm.xyz | bash || { echo "Failed to install Foundry"; exit 1; }
+echo 'export PATH="$PATH:$HOME/.foundry/bin"' >> "$HOME/.profile"
+source "$HOME/.profile"
+foundryup || { echo "Failed to update Foundry"; exit 1; }
 
-# Конфигурация contracts/Makefile
-MAKEFILE=$HOME/infernet-container-starter/projects/hello-world/contracts/Makefile
-sed -i 's|sender := .*|sender := '"$PRIVATE_KEY"'|' "$MAKEFILE"
-sed -i 's|RPC_URL := .*|RPC_URL := '"$RPC_URL"'|' "$MAKEFILE"
+# Встановлення залежностей контрактів
+cd "$HOME/infernet-container-starter/projects/hello-world/contracts/lib/" || exit 1
+rm -rf forge-std infernet-sdk
+forge install --no-commit foundry-rs/forge-std || exit 1
+forge install --no-commit ritual-net/infernet-sdk || exit 1
 
-#Cтарт контейнеров для инициализации новой конфигурации
-sed -i 's|ritualnetwork/infernet-node:.*|ritualnetwork/infernet-node:1.4.0|' $HOME/infernet-container-starter/deploy/docker-compose.yaml
-sed -i 's|0.0.0.0:4000:4000|0.0.0.0:4321:4000|' $HOME/infernet-container-starter/deploy/docker-compose.yaml
-sed -i 's|8545:3000|8845:3000|' $HOME/infernet-container-starter/deploy/docker-compose.yaml
-sed -i 's|container_name: infernet-anvil|container_name: infernet-anvil\n    restart: on-failure|' $HOME/infernet-container-starter/deploy/docker-compose.yaml
-
-docker compose -f $HOME/infernet-container-starter/deploy/docker-compose.yaml up -d
-
-# Установка Foundry
-cd $HOME
-mkdir -p foundry
-cd foundry
-curl -L https://foundry.paradigm.xyz | bash
-source ~/.bashrc
-echo 'export PATH="$PATH:/root/.foundry/bin"' >> .profile
-source .profile
-
-foundryup
-
-# Установка зависимостей для контрактов
-cd $HOME/infernet-container-starter/projects/hello-world/contracts/lib/
-rm -r forge-std
-rm -r infernet-sdk
-forge install --no-commit foundry-rs/forge-std
-forge install --no-commit ritual-net/infernet-sdk
-
-# Deploy Consumer Contract
-cd $HOME/infernet-container-starter
-project=hello-world make deploy-contracts >> logs.txt
+# Деплой контрактів
+cd "$HOME/infernet-container-starter" || exit 1
+project=hello-world make deploy-contracts >> logs.txt 2>&1 || { echo "Failed to deploy contracts"; exit 1; }
 CONTRACT_ADDRESS=$(grep "Deployed SaysHello" logs.txt | awk '{print $NF}')
-rm -rf logs.txt
+rm -f logs.txt
 
-sed -i 's|0x13D69Cf7d6CE4218F646B759Dcf334D82c023d8e|'$CONTRACT_ADDRESS'|' "$HOME/infernet-container-starter/projects/hello-world/contracts/script/CallContract.s.sol"
+# Оновлення адреси контракту
+sed -i "s|0x13D69Cf7d6CE4218F646B759Dcf334D82c023d8e|$CONTRACT_ADDRESS|" "$HOME/infernet-container-starter/projects/hello-world/contracts/script/CallContract.s.sol"
 
-# Call Consumer Contract
-cd $HOME/infernet-container-starter
-project=hello-world make call-contract
+# Виклик контракту
+project=hello-world make call-contract || { echo "Failed to call contract"; exit 1; }
 
-cd $HOME/infernet-container-starter/deploy
-
+# Фінальна конфігурація
+cd "$HOME/infernet-container-starter/deploy" || exit 1
 docker compose down
 sleep 3
-sudo rm -rf docker-compose.yaml
-wget https://raw.githubusercontent.com/NodEligible/guides/refs/heads/main/ritual/docker-compose.yaml
-docker compose up -d
+sudo rm -f docker-compose.yaml
+wget -q https://raw.githubusercontent.com/NodEligible/guides/refs/heads/main/ritual/docker-compose.yaml
+docker compose up -d || { echo "Failed to start final containers"; exit 1; }
+docker rm -fv infernet-anvil &>/dev/null
 
-docker rm -fv infernet-anvil  &>/dev/null
+printGreen "Installation completed successfully!"
