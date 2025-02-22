@@ -6,6 +6,14 @@ source <(curl -s https://raw.githubusercontent.com/R1M-NODES/utils/master/common
 # Відображення логотипу
 printLogo
 
+# Запрашиваем параметры у пользователя
+echo -e "Setting Node"
+RPC_URL=$(request_param "Press RPC URL")
+PRIVATE_KEY=$(request_param "Press you privat key")
+
+REGISTRY_ADDRESS=0x3B1554f346DFe5c482Bb4BA31b880c1C18412170
+IMAGE="ritualnetwork/infernet-node:1.4.0"
+
 sudo apt update -y
 sudo apt install mc wget curl git htop netcat net-tools unzip jq build-essential ncdu tmux make cmake clang pkg-config libssl-dev protobuf-compiler bc lz4 screen -y
 
