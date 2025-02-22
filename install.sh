@@ -6,8 +6,14 @@ source <(curl -s https://raw.githubusercontent.com/R1M-NODES/utils/master/common
 # Відображення логотипу
 printLogo
 
-RPC_URL=$(request_param "Введите RPC URL")
-PRIVATE_KEY=$(request_param "Введите ваш приватный ключ (начинающийся с 0x)")
+echo -e "${YELLOW}Пожалуйста, введите следующие параметры для настройки ноды:${NC}"
+
+# Заміна на стандартний спосіб введення параметрів
+echo -n "Введите RPC URL: "
+read RPC_URL
+
+echo -n "Введите ваш приватный ключ (начинающийся с 0x): "
+read PRIVATE_KEY
 
 [[ "$PRIVATE_KEY" =~ ^0x ]] || exit 1
 
@@ -36,7 +42,6 @@ update
 install_main
 install_ufw
 install_docker
-
 
 cd "$HOME"
 git clone https://github.com/ritual-net/infernet-container-starter
@@ -91,7 +96,7 @@ rm -f logs.txt
 
 [ -z "$CONTRACT_ADDRESS" ] && exit 1
 
-echo -e "${GREEN} You contract address $CONTRACT_ADDRESS${NC}"
+echo -e "${GREEN} Your contract address $CONTRACT_ADDRESS${NC}"
 sed -i "s|0x13D69Cf7d6CE4218F646B759Dcf334D82c023d8e|$CONTRACT_ADDRESS|" "$HOME_DIR/projects/hello-world/contracts/script/CallContract.s.sol"
 
 project=hello-world make call-contract
