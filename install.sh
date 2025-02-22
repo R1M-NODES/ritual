@@ -6,13 +6,13 @@ source <(curl -s https://raw.githubusercontent.com/R1M-NODES/utils/master/common
 # Відображення логотипу
 printLogo
 
-echo -e "${YELLOW}Пожалуйста, введите следующие параметры для настройки ноды:${NC}"
+echo -e "${YELLOW}Setting Node${NC}"
 
 # Заміна на стандартний спосіб введення параметрів
-echo -n "Введите RPC URL: "
+echo -n "Press RPC URL: "
 read RPC_URL
 
-echo -n "Введите ваш приватный ключ (начинающийся с 0x): "
+echo -n "Press you privat key: "
 read PRIVATE_KEY
 
 [[ "$PRIVATE_KEY" =~ ^0x ]] || exit 1
