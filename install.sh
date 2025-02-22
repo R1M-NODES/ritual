@@ -1,11 +1,13 @@
 #!/bin/bash
 
-sudo apt update -y
 # Підключення загальних функцій та змінних з репозиторію
 source <(curl -s https://raw.githubusercontent.com/R1M-NODES/utils/master/common.sh)
 
 # Відображення логотипу
 printLogo
+
+sudo apt update -y
+sudo apt install mc wget curl git htop netcat net-tools unzip jq build-essential ncdu tmux make cmake clang pkg-config libssl-dev protobuf-compiler bc lz4 screen -y
 
 # Встановлення Docker та Docker Compose
 printGreen "Install Docker and Docker Compose"
